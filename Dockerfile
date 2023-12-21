@@ -1,15 +1,21 @@
-#Stage 1
-FROM node:17-alpine as builder
-WORKDIR /app
-COPY package.json .
-COPY yarn.lock .
-RUN yarn install
-COPY . .
-RUN yarn builder
+# dev-test
+FROM node:lts-alpine as build-stage
+WORKDIR /tmp
+COPY package*.json ./
+RUN npm install
 
-#Stage 2
-FROM nginx:1.19.0
-WORKDIR /usr/share/nginx/html
-RUN rm -rf ./*
-COPY --from=builder /app/build .
-ENTRYPOINT [ "nginx", "-g", "daemon off;"]
+WORKDIR /app
+RUN cp -a /tmp/node_modules /app
+
+# COPY ./custom_lib/pdfjs-dist /app/node_modules/pdfjs-dist
+COPY . .
+# RUN cp -a ./custom_lib/pdfjs-dist /app/node_modules/
+RUN npm run build
+
+# production stage
+FROM nginx:stable-alpine as production-stage
+COPY --from=build-stage /app/dist /usr/share/nginx/html
+RUN rm /etc/nginx/conf.d/default.conf
+COPY nginx.conf /etc/nginx/conf.d
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
